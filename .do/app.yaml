@@ -1,0 +1,23 @@
+# DigitalOcean App Platform spec.
+# The dashboard auto-detects this file when you create the app from the GitHub
+# repo. After the app is created, set the ACCESS_TOKEN secret in:
+#   App -> Settings -> App-Level Environment Variables  (mark it "Encrypt").
+# Do NOT put the real token here — this repo is public.
+name: video-downloader
+region: nyc
+services:
+  - name: download-youtube
+    dockerfile_path: Dockerfile
+    github:
+      repo: the-edward-exe/video-downloader
+      branch: main
+      deploy_on_push: true
+    http_port: 8080
+    instance_size_slug: basic-xxs
+    instance_count: 1
+    health_check:
+      http_path: /
+    envs:
+      - key: ACCESS_TOKEN
+        scope: RUN_TIME
+        type: SECRET

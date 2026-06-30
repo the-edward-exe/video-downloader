@@ -60,6 +60,38 @@ Drop the `download-youtube.skill` bundle into Claude via **Settings → Capabili
 → Skills**, or copy `.claude/skills/download-youtube/` into your project's or
 user's `.claude/skills/` directory.
 
+## Run as a web service (DigitalOcean App Platform)
+
+The repo also ships a small Flask wrapper (`app.py`) so the downloader can run as
+a hosted service. Because App Platform is stateless with an ephemeral disk, the
+service **streams the file back in the HTTP response** rather than saving to a
+folder, and it's gated by a shared secret in the `ACCESS_TOKEN` env var.
+
+Files: `app.py` (web service), `requirements.txt`, `Dockerfile` (installs
+`ffmpeg`), and `.do/app.yaml` (App Platform spec).
+
+Deploy:
+1. https://cloud.digitalocean.com/apps → **Create App** → source **GitHub** →
+   pick this repo / `main`. App Platform detects `.do/app.yaml` + the Dockerfile.
+2. Set `ACCESS_TOKEN` as an **encrypted** app-level env var (your own secret).
+3. Create resources; you get a URL like `https://<app>.ondigitalocean.app`.
+
+Call it:
+```bash
+# header auth (recommended)
+curl -H "X-Auth-Token: YOUR_TOKEN" \
+  "https://<app>.ondigitalocean.app/download?url=VIDEO_URL&quality=720p" -OJ
+
+# or token as a query param
+curl "https://<app>.ondigitalocean.app/download?url=VIDEO_URL&token=YOUR_TOKEN" -OJ
+```
+Query params: `url` (required), `quality`, `format`, `audio=1` (MP3).
+
+> **Heads up:** YouTube frequently blocks datacenter IPs (incl. DigitalOcean) with
+> a "sign in to confirm you're not a bot" error. The service works reliably for
+> many sources, but server-side *YouTube* downloads can fail where your local
+> machine succeeds.
+
 ## Notes
 
 - Files are named `<title (≤80 chars)> [<id>].<ext>` so videos with empty or
