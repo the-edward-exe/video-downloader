@@ -1,0 +1,17 @@
+# Downloaded media — third-party content and large binaries, not part of the tool
+YouTube downloads/
+*.mp4
+*.webm
+*.mkv
+*.mp3
+*.m4a
+*.part
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
