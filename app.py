@@ -14,6 +14,7 @@ Endpoints:
 """
 
 import os
+import sys
 import glob
 import shutil
 import tempfile
@@ -78,7 +79,10 @@ def download():
     audio_only = request.args.get("audio", "").lower() in ("1", "true", "yes")
 
     tmpdir = tempfile.mkdtemp(prefix="dl-")
-    cmd = ["yt-dlp"]
+    # --socket-timeout keeps a stalled connection from hanging indefinitely; the
+    # overall subprocess timeout below is the real backstop against App Platform's
+    # gateway cutting us off with an opaque 502.
+    cmd = ["yt-dlp", "--socket-timeout", "20", "--no-warnings"]
     if audio_only:
         cmd += ["-x", "--audio-format", "mp3", "--audio-quality", "0"]
     else:
@@ -90,12 +94,20 @@ def download():
     ]
 
     try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        # Fail before App Platform's HTTP gateway (~60s) does, so the caller gets
+        # a clean app-level error instead of an opaque gateway 502/504.
+        subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=45)
+    except subprocess.TimeoutExpired:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        print(f"yt-dlp timed out (>45s) for {url}", file=sys.stderr, flush=True)
+        abort(504, "Download timed out after 45s — the source is slow or is "
+                   "blocking this server (datacenter IPs are often challenged).")
     except subprocess.CalledProcessError as e:
         shutil.rmtree(tmpdir, ignore_errors=True)
         # yt-dlp's stderr usually explains the real cause (geo-block, "sign in to
         # confirm you're not a bot" from datacenter IPs, private video, etc.).
         detail = (e.stderr or e.stdout or "").strip()[-800:]
+        print(f"yt-dlp failed for {url}: {detail}", file=sys.stderr, flush=True)
         abort(502, f"yt-dlp failed: {detail}")
 
     files = [f for f in glob.glob(os.path.join(tmpdir, "*")) if os.path.isfile(f)]
