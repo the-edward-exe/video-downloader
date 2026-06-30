@@ -28,6 +28,13 @@ app = Flask(__name__)
 # Variables) as an encrypted SECRET. Never commit the real value.
 ACCESS_TOKEN = os.environ.get("ACCESS_TOKEN")
 
+# Optional: the CONTENTS of a Netscape-format cookies.txt (not a path), for
+# sites that block anonymous or datacenter access — notably YouTube from cloud
+# IPs ("sign in to confirm you're not a bot"). Store as an encrypted env var;
+# the app writes it to a per-request temp file and passes it to yt-dlp.
+# Use a BURNER account's cookies, never a personal Google login.
+YT_COOKIES = os.environ.get("YT_COOKIES")
+
 QUALITIES = {"best", "1080p", "720p", "480p", "360p", "worst"}
 FORMATS = {"mp4", "webm", "mkv"}
 
@@ -57,6 +64,7 @@ def health():
         status="ok",
         service="download-youtube",
         configured=bool(ACCESS_TOKEN),
+        cookies=bool(YT_COOKIES),
     )
 
 
@@ -83,6 +91,15 @@ def download():
     # overall subprocess timeout below is the real backstop against App Platform's
     # gateway cutting us off with an opaque 502.
     cmd = ["yt-dlp", "--socket-timeout", "20", "--no-warnings"]
+
+    if YT_COOKIES:
+        # Write the cookie jar to the temp dir (cleaned up with the rest after the
+        # response). Force LF newlines — yt-dlp expects Netscape format.
+        cookie_path = os.path.join(tmpdir, "cookies.txt")
+        with open(cookie_path, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(YT_COOKIES if YT_COOKIES.endswith("\n") else YT_COOKIES + "\n")
+        cmd += ["--cookies", cookie_path]
+
     if audio_only:
         cmd += ["-x", "--audio-format", "mp3", "--audio-quality", "0"]
     else:
